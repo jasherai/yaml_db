@@ -82,10 +82,17 @@ module SerializationHelper
       columns = column_names.map{|cn| ActiveRecord::Base.connection.columns(table).detect{|c| c.name == cn}}
       quoted_column_names = column_names.map { |column| ActiveRecord::Base.connection.quote_column_name(column) }.join(',')
       quoted_table_name = SerializationHelper::Utils.quote_table(table)
+      extended_insert = SerializationHelper::Utils.extended_insert
+
+      extended_quoted_values = []
       records.each do |record|
         quoted_values = record.zip(columns).map{|c| ActiveRecord::Base.connection.quote(c.first, c.last)}.join(',')
-        ActiveRecord::Base.connection.execute("INSERT INTO #{quoted_table_name} (#{quoted_column_names}) VALUES (#{quoted_values})")
+        extended_quoted_values  << "(#{quoted_values})" if extended_insert
+        ActiveRecord::Base.connection.execute("INSERT INTO #{quoted_table_name} (#{quoted_column_names}) VALUES (#{quoted_values})") unless extended_insert
       end
+
+      ActiveRecord::Base.connection.execute("INSERT INTO #{quoted_table_name} (#{quoted_column_names}) VALUES #{extended_quoted_values.join(',')}") if extended_insert
+
     end
 
     def self.reset_pk_sequence!(table_name)
@@ -134,6 +141,10 @@ module SerializationHelper
       ActiveRecord::Base.connection.quote_table_name(table)
     end
 
+    def self.extended_insert
+      extended_insert = ActiveRecord::Base.connection.kind_of?(ActiveRecord::ConnectionAdapters::MysqlAdapter)
+      return extended_insert
+    end
   end
 
   class Dump
